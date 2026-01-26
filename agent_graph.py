@@ -47,9 +47,11 @@ def mock_ledger_transfer(ledger: dict, source: str, destination: str, amount: fl
         new_ledger[f"{destination}_balance"] += amount
     return new_ledger
 
+from langchain_core.runnables import RunnableConfig
+
 # --- Nodes ---
 
-def node_analyze_intent(state: GraphState):
+def node_analyze_intent(state: GraphState, config: RunnableConfig):
     """Buyer Agent: Parses user input into structured intent."""
     print("--- BUYER AGENT: ANALYZING INTENT ---")
     messages = state["messages"]
@@ -63,7 +65,11 @@ def node_analyze_intent(state: GraphState):
     )
     chain = prompt | llm | StrOutputParser()
     try:
-        response = chain.invoke({"request": last_message})
+        # Merge config with tags
+        run_config = config.copy() if config else {}
+        run_config["tags"] = ["Buyer Agent"]
+        response = chain.invoke({"request": last_message}, config=run_config)
+        
         # Basic cleanup to find JSON
         json_str = response[response.find("{"):response.rfind("}")+1]
         data = json.loads(json_str)
@@ -87,7 +93,11 @@ def node_analyze_intent(state: GraphState):
         "Think aloud about your current status and what you are submitting."
     )
     thought_chain = thought_prompt | llm | StrOutputParser()
-    thought = thought_chain.invoke({"item": item, "amount": amount})
+    
+    # Merge config with tags
+    run_config = config.copy() if config else {}
+    run_config["tags"] = ["Buyer Agent"]
+    thought = thought_chain.invoke({"item": item, "amount": amount}, config=run_config)
     
     return {
         "buyer_intent": buyer_intent,
@@ -96,7 +106,7 @@ def node_analyze_intent(state: GraphState):
         "negotiation_log": [f"BA: Initiating purchase for {item} (${amount})."]
     }
 
-def node_evaluate_compliance(state: GraphState):
+def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
     """Compliance Agent: Checks Sanctions and Amount."""
     print("--- COMPLIANCE AGENT: EVALUATING ---")
     intent = state["buyer_intent"]
@@ -114,7 +124,10 @@ def node_evaluate_compliance(state: GraphState):
         "Determine the status (PASS/PENDING) and explain your reasoning concisely."
     )
     chain = prompt | llm | StrOutputParser()
-    thought = chain.invoke({"amount": amount, "sof_vc": vcs["sof"], "sanctions_vc": vcs["sanctions"]})
+    
+    run_config = config.copy() if config else {}
+    run_config["tags"] = ["Compliance Agent"]
+    thought = chain.invoke({"amount": amount, "sof_vc": vcs["sof"], "sanctions_vc": vcs["sanctions"]}, config=run_config)
     
     status = "PENDING"
     if "PASS" in thought and "PENDING" not in thought: # Simple keyword check, favoring strictness
@@ -130,7 +143,7 @@ def node_evaluate_compliance(state: GraphState):
         "current_thought": thought
     }
 
-def node_propose_escrow(state: GraphState):
+def node_propose_escrow(state: GraphState, config: RunnableConfig):
     """Compliance Agent: Proposes split."""
     print("--- COMPLIANCE AGENT: PROPOSING ESCROW ---")
     amount = state["buyer_intent"]["amount"]
@@ -146,7 +159,10 @@ def node_propose_escrow(state: GraphState):
         "until Source of Funds is provided. Write a professional proposal message."
     )
     chain = prompt | llm | StrOutputParser()
-    thought = chain.invoke({"amount": amount, "upfront": upfront, "escrow": escrow})
+    
+    run_config = config.copy() if config else {}
+    run_config["tags"] = ["Compliance Agent"]
+    thought = chain.invoke({"amount": amount, "upfront": upfront, "escrow": escrow}, config=run_config)
     
     proposal = f"Escrow Proposal: Pay ${upfront:.2f} (20%) directly, lock ${escrow:.2f} (80%) in Escrow."
     
@@ -156,7 +172,7 @@ def node_propose_escrow(state: GraphState):
         "negotiation_log": [f"CA: {proposal}"]
     }
 
-def node_negotiate_acceptance(state: GraphState):
+def node_negotiate_acceptance(state: GraphState, config: RunnableConfig):
     """Buyer Agent: Accepts the proposal."""
     print("--- BUYER AGENT: ACCEPTING ---")
     
@@ -167,7 +183,10 @@ def node_negotiate_acceptance(state: GraphState):
         "Explain your reasoning (accepting the trade-off)."
     )
     chain = prompt | llm | StrOutputParser()
-    thought = chain.invoke({})
+    
+    run_config = config.copy() if config else {}
+    run_config["tags"] = ["Buyer Agent"]
+    thought = chain.invoke({}, config=run_config)
     
     return {
         "active_agent": "BA",
@@ -175,7 +194,7 @@ def node_negotiate_acceptance(state: GraphState):
         "negotiation_log": ["BA: Proposal Accepted. Proceeding to smart contract."]
     }
 
-def node_execute_escrow(state: GraphState):
+def node_execute_escrow(state: GraphState, config: RunnableConfig):
     """Mock Ledger: Executes the split."""
     print("--- LEDGER: EXECUTING ESCROW ---")
     ledger = state["ledger"]
@@ -199,7 +218,7 @@ def node_execute_escrow(state: GraphState):
         "negotiation_log": ["Chain: Tx confirmed. Funds Locked."]
     }
 
-def node_finalize_settlement(state: GraphState):
+def node_finalize_settlement(state: GraphState, config: RunnableConfig):
     """Compliance Agent: Finalizes after SoF."""
     print("--- COMPLIANCE AGENT: FINALIZING ---")
     ledger = state["ledger"]
@@ -215,7 +234,10 @@ def node_finalize_settlement(state: GraphState):
         "Release the funds from escrow to the seller. State that the transaction is now fully compliant."
     )
     chain = prompt | llm | StrOutputParser()
-    thought = chain.invoke({})
+    
+    run_config = config.copy() if config else {}
+    run_config["tags"] = ["Compliance Agent"]
+    thought = chain.invoke({}, config=run_config)
     
     return {
         "ledger": ledger,

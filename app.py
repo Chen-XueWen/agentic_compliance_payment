@@ -15,7 +15,7 @@ st.set_page_config(page_title="Agentic Compliance Payment", layout="wide")
 st.markdown("""
 <style>
     .reportview-container {
-        background: #0e1117;
+        background: #ffffff;
     }
     .stMarkdown {
         font-family: 'Inter', sans-serif;
@@ -25,22 +25,61 @@ st.markdown("""
         font-weight: 600;
         color: #00ADB5;
     }
-    .metric-card {
-        background-color: #222831;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #393E46;
-        text-align: center;
+    
+    /* Wallet Sticky Container - Light Glassmorphism */
+    .wallet-sticky-container {
+        position: sticky;
+        top: 0;
+        z-index: 9999;
+        background: rgba(255, 255, 255, 0.95); /* White background */
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: 10px 0 20px 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
     }
+    
+    .wallet-grid {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    /* Metric Card - Light Theme */
+    .metric-card {
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        padding: 15px;
+        border-radius: 12px;
+        text-align: center;
+        flex: 1;
+        min-width: 0;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+    .metric-card:hover {
+        border-color: #00ADB5;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+    }
+    
     .metric-label {
         font-size: 0.9rem;
-        color: #EEEEEE;
+        color: #555555; /* Dark gray text */
         margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
     }
     .metric-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #00ADB5;
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #333333; /* Darker text for value */
+        text-shadow: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -106,26 +145,62 @@ with st.sidebar:
     status_color = "🟢" if st.session_state.compliance_status == "PASS" else "🟡" if st.session_state.compliance_status in ["PENDING", "ESCROW_ACTIVE"] else "⚪"
     st.markdown(f"**Compliance Status:** {status_color} `{st.session_state.compliance_status}`")
 
+from langchain_core.callbacks import BaseCallbackHandler
+
+class StreamlitTokenStreamer(BaseCallbackHandler):
+    def __init__(self, container):
+        self.container = container
+        self.placeholder = None
+        self.text = ""
+        self.stream_box = None
+        
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        self.text = ""
+        # Determine agent from tags if available
+        tags = kwargs.get("tags", [])
+        agent_name = tags[0] if tags else "Agent"
+        
+        # Create a chat message placeholder for streaming
+        self.stream_box = self.container.chat_message(name=agent_name, avatar="🤖")
+        self.placeholder = self.stream_box.empty()
+        self.placeholder.markdown("...")
+        
+    def on_llm_new_token(self, token, **kwargs):
+        self.text += token
+        self.placeholder.markdown(self.text + "▌")
+        
+    def on_llm_end(self, response, **kwargs):
+        # Finalize the message without the cursor
+        self.placeholder.markdown(self.text)
+
 # --- Main Panel ---
 st.title("🤖 Agentic Compliance Payment System")
 
-# Transaction Monitor
-cols = st.columns(3)
+# Transaction Monitor (Sticky Wallet)
 ledger = st.session_state.current_ledger
-def metric_card(col, label, value):
-    col.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">{label}</div>
-        <div class="metric-value">${value:,.2f}</div>
+
+def render_wallet_html(current_ledger):
+    return f"""
+    <div class="wallet-sticky-container">
+        <div class="wallet-grid">
+            <div class="metric-card">
+                <div class="metric-label">Buyer Wallet</div>
+                <div class="metric-value">${current_ledger['buyer_balance']:,.2f}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Escrow Vault</div>
+                <div class="metric-value">${current_ledger['escrow_balance']:,.2f}</div>
+            </div>
+             <div class="metric-card">
+                <div class="metric-label">Seller Wallet</div>
+                <div class="metric-value">${current_ledger['seller_balance']:,.2f}</div>
+            </div>
+        </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
 
 monitor_container = st.empty()
-with monitor_container.container():
-     c1, c2, c3 = st.columns(3)
-     metric_card(c1, "Buyer Wallet", ledger["buyer_balance"])
-     metric_card(c2, "Escrow Vault", ledger["escrow_balance"])
-     metric_card(c3, "Seller Wallet", ledger["seller_balance"])
+monitor_container.markdown(render_wallet_html(ledger), unsafe_allow_html=True)
 
 
 st.divider()
@@ -143,7 +218,7 @@ with controls_col:
 
 # "Thinking" Log
 st.subheader("Agent Internals & Negotiation Log")
-log_container = st.container() 
+log_container = st.container(height=500) 
 
 # Render History
 def render_history_to_container(container):
@@ -173,7 +248,14 @@ render_history_to_container(log_container)
 
 # Helper to run the graph
 def run_interaction(inputs=None, resume=False):
-    config = {"configurable": {"thread_id": st.session_state.thread_id}}
+    # Setup Custom Token Streamer for Main Log
+    st_callback = StreamlitTokenStreamer(container=log_container)
+    
+    # Pass callbacks to the graph config
+    config = {
+        "configurable": {"thread_id": st.session_state.thread_id},
+        "callbacks": [st_callback]
+    }
     
     # Use the shared container
     container_expander = log_container
@@ -205,17 +287,16 @@ def run_interaction(inputs=None, resume=False):
 
                 # Render Update (Stream new item)
                 with container_expander:
-                     with st.chat_message(name=agent, avatar="🤖"):
-                        st.markdown(f"**{agent}**: {thought}")
-                        if log_item:
-                             st.code(log_item)
+                     # Thought already streamed by callback, so we don't render it here.
+                     # Only render the formal log if present.
+                     if log_item:
+                         # We put it in a separate code block for now, or we could try to append to the previous chat message
+                         # but accessing the previous container is hard.
+                         # Rendering it as a standalone code block is clear enough.
+                         st.code(log_item)
                 
                 # Live Update Monitor
-                with monitor_container.container():
-                     c1, c2, c3 = st.columns(3)
-                     metric_card(c1, "Buyer Wallet", st.session_state.current_ledger["buyer_balance"])
-                     metric_card(c2, "Escrow Vault", st.session_state.current_ledger["escrow_balance"])
-                     metric_card(c3, "Seller Wallet", st.session_state.current_ledger["seller_balance"])
+                monitor_container.markdown(render_wallet_html(st.session_state.current_ledger), unsafe_allow_html=True)
                 
                 # LOOK-AHEAD: Predict next node to highlight NOW (while backend is crunching)
                 next_node = get_next_node(node_name, st.session_state.compliance_status)
