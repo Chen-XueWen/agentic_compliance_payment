@@ -6,7 +6,11 @@ import time
 import streamlit.components.v1 as components
 
 # Import our backend
-from agent_graph import app_graph, GraphState
+from src.graph import app_graph
+from src.state import GraphState
+from src.config import ADDRS
+from src.blockchain.client import w3
+from src.blockchain import abis
 
 # --- Config ---
 st.set_page_config(page_title="Agentic Compliance Payment", layout="wide")
@@ -202,6 +206,36 @@ def render_wallet_html(current_ledger):
 monitor_container = st.empty()
 monitor_container.markdown(render_wallet_html(ledger), unsafe_allow_html=True)
 
+# --- On-chain Metadata ---
+if "transaction_id" in st.session_state:
+    st.caption(f"**Last Transaction ID:** `{st.session_state.transaction_id}`")
+    
+    # Fetch Attestation if ID exists and we have Web3
+    if st.session_state.transaction_id and w3 and ADDRS:
+        try:
+            wrapper = w3.eth.contract(address=ADDRS["PolicyWrapper"], abi=abis.WRAPPER_ABI)
+            # transactionId is bytes32
+            tx_id_bytes = bytes.fromhex(st.session_state.transaction_id)
+            overall, results = wrapper.functions.getAttestation(tx_id_bytes).call()
+            
+            with st.expander("Blockchain Attestation (PolicyWrapper)", expanded=True):
+                status_map = {0: "PASS", 1: "FAIL", 2: "PENDING"}
+                st.markdown(f"**Overall Status:** `{status_map.get(overall, 'UNKNOWN')}`")
+                
+                for r in results:
+                    p_id = r[0].hex()
+                    p_status = status_map.get(r[1], "UNKNOWN")
+                    # Decode reason (bytes32 to string)
+                    try:
+                        p_reason = r[2].decode("utf-8").strip("\x00")
+                    except:
+                        p_reason = r[2].hex()
+                        
+                    color = "green" if p_status == "PASS" else "red" if p_status == "FAIL" else "orange"
+                    st.markdown(f"- Policy `{p_id[:10]}...`: :{color}[{p_status}] {p_reason if p_reason else ''}")
+        except Exception as e:
+            st.error(f"Could not fetch attestation: {e}")
+
 
 st.divider()
 
@@ -272,6 +306,7 @@ def run_interaction(inputs=None, resume=False):
                 # Update Session State
                 st.session_state.current_ledger = state_update.get("ledger", st.session_state.current_ledger)
                 st.session_state.compliance_status = state_update.get("compliance_status", st.session_state.compliance_status)
+                st.session_state.transaction_id = state_update.get("transaction_id", st.session_state.get("transaction_id"))
                 
                 thought = state_update.get("current_thought", "")
                 agent = state_update.get("active_agent", "SYSTEM")
@@ -339,6 +374,40 @@ if st.session_state.compliance_status == "STARTING":
     }
     
     run_interaction(initial_inputs)
+
+# Pending Mediation
+if st.session_state.compliance_status == "PENDING":
+    st.warning("⚠️ Compliance Checked Failed. Mediation Proposed.")
+    st.write("The Compliance Agent has proposed an escrow alternative due to missing Source of Funds.")
+    
+    if st.button("Accept Escrow Alternative"):
+        st.session_state.compliance_status = "ESCROW_INITIALIZING" # Temporary feedback
+        run_interaction(resume=True)
+
+# Refund & Admin
+with st.sidebar:
+    st.markdown("---")
+    st.subheader("Admin Controls")
+    if st.button("Refund Escrow"):
+         # Refund Logic directly via Web3 for demo
+         if w3 and ADDRS:
+             try:
+                 escrow_addr = ADDRS.get("SimpleEscrow") or ADDRS["ComplianceAgent"] 
+                 # We fallback because we don't know exact escrow address in this simple setup
+                 # In reality we would read it from logs/events
+                 if escrow_addr:
+                     # Using CA key to call refund
+                     from eth_account import Account
+                     escrow = w3.eth.contract(address=escrow_addr, abi=abis.ESCROW_ABI)
+                     ca = Account.from_key("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+                     tx = escrow.functions.refund().build_transaction({
+                         "from": ca.address,
+                         "nonce": w3.eth.get_transaction_count(ca.address)
+                     })
+                     w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx, private_key=ca.key).raw_transaction)
+                     st.success("Refund Triggered on Chain.")
+             except Exception as e:
+                 st.error(f"Refund Failed: {e}")
 
 # Source of Funds Upload
 if st.session_state.compliance_status == "ESCROW_ACTIVE":
