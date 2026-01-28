@@ -5,6 +5,7 @@ import operator
 class GraphState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
     buyer_intent: dict      # {item, amount, attached_vcs: {sanctions: bool, sof: bool}}
+    buyer_credentials: dict # {has_sanctions: bool, has_sof: bool} (Loaded at start)
     seller_offer: dict      # {sku, price, jurisdiction}
     compliance_status: str  # "PASS", "FAIL", "PENDING", "ESCROW_ACTIVE"
     active_agent: str       # "Buyer Agent", "Seller Agent", or "Compliance Agent"

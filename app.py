@@ -278,8 +278,10 @@ def get_next_node(current_node, status):
         return "finalize_settlement"
     return current_node
 
-# Always render existing history
-render_history_to_container(log_container)
+# Only render history if we are NOT about to stream new content
+# (Avoid duplication when STARTING or ESCROW_INITIALIZING will trigger streaming)
+if st.session_state.compliance_status not in ["STARTING", "ESCROW_INITIALIZING"]:
+    render_history_to_container(log_container)
 
 # Helper to run the graph
 def run_interaction(inputs=None, resume=False):
@@ -314,22 +316,29 @@ def run_interaction(inputs=None, resume=False):
                 neg_log = state_update.get("negotiation_log", [])
                 log_item = neg_log[-1] if neg_log else None
                 
-                # Append to History
-                st.session_state.messages_log.append({
+                # Debugging Log
+                print(f"DEBUG: Node={node_name}, Agent={agent}, LogItem={str(log_item)[:50]}...")
+                
+                # Append to History (Deduplicated)
+                new_entry = {
                     "agent": agent,
                     "thought": thought,
                     "log": log_item
-                })
-
-                # Render Update (Stream new item)
-                with container_expander:
-                     # Thought already streamed by callback, so we don't render it here.
-                     # Only render the formal log if present.
-                     if log_item:
-                         # We put it in a separate code block for now, or we could try to append to the previous chat message
-                         # but accessing the previous container is hard.
-                         # Rendering it as a standalone code block is clear enough.
-                         st.code(log_item)
+                }
+                
+                # Check if this exact entry is already the last one (prevent stutter)
+                if not st.session_state.messages_log or st.session_state.messages_log[-1] != new_entry:
+                     print("DEBUG: Appending new entry.")
+                     st.session_state.messages_log.append(new_entry)
+                     
+                     # Render Update (Stream new item)
+                     with container_expander:
+                          # Thought already streamed by callback, so we don't render it here.
+                          # Only render the formal log if present.
+                          if log_item:
+                              st.code(log_item)
+                else:
+                     print("DEBUG: Duplicate entry detected. Skipping.")
                 
                 # Live Update Monitor
                 monitor_container.markdown(render_wallet_html(st.session_state.current_ledger), unsafe_allow_html=True)
@@ -366,9 +375,21 @@ if st.session_state.compliance_status == "STARTING":
              render_mermaid(mmd, height=500)
          st.caption("Active: `analyze_intent`")
     
+    # Fetch Initial Credentials
+    init_creds = {"has_sanctions": False, "has_sof": False}
+    if w3 and ADDRS:
+        try:
+             registry = w3.eth.contract(address=ADDRS["IdentityRegistry"], abi=abis.REGISTRY_ABI)
+             buyer_addr = ADDRS["Buyer"]
+             init_creds["has_sanctions"] = registry.functions.hasSanctionsCheck(buyer_addr).call()
+             init_creds["has_sof"] = registry.functions.hasSourceOfFunds(buyer_addr).call()
+        except Exception as e:
+             st.error(f"Failed to fetch initial credentials: {e}")
+
     initial_inputs = {
         "messages": [HumanMessage(content=buyer_request)],
         "ledger": get_onchain_ledger(),
+        "buyer_credentials": init_creds,
         # Reset other keys if needed
         "buyer_intent": {},
         "negotiation_log": []
@@ -382,9 +403,19 @@ if st.session_state.compliance_status == "PENDING":
     st.write("The Compliance Agent has proposed an escrow alternative due to missing Source of Funds.")
     
     if st.button("Accept Escrow Alternative"):
-        st.session_state.compliance_status = "ESCROW_INITIALIZING" # Temporary feedback
-        run_interaction(resume=True)
+        st.session_state.compliance_status = "ESCROW_INITIALIZING" # Trigger processing on next run
         st.rerun()
+
+# Handle the Escrow Initialization after rerun
+if st.session_state.compliance_status == "ESCROW_INITIALIZING":
+    # Pre-render graph to show activity immediately
+    with graph_container.container():
+         mmd = get_graph_mermaid(active_node="execute_escrow")
+         if mmd:
+             render_mermaid(mmd, height=500)
+         st.caption("Active: `execute_escrow`")
+    
+    run_interaction(resume=True)
 
 # Refund & Admin
 with st.sidebar:

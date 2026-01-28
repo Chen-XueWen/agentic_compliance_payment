@@ -7,6 +7,7 @@ import "../src/demo/DemoIdentityRegistry.sol";
 import "../src/demo/SourceOfFundsPolicy.sol";
 import "../src/demo/SanctionsPolicy.sol";
 import "../src/demo/SimplePolicyManager.sol";
+import "../src/demo/SimpleEscrow.sol";
 import "../src/demo/X402PolicyWrapper.sol";
 
 contract DeployDemoSuite is Script {
@@ -52,7 +53,6 @@ contract DeployDemoSuite is Script {
         // 5.5 Deploy SimpleEscrow (Standalone for Demo)
         // In a real app, this is deployed per transaction. Here we deploy one shared instance.
         // We use block.timestamp + 1000 days for expiry
-        import "../src/demo/SimpleEscrow.sol";
         SimpleEscrow escrow = new SimpleEscrow(address(token), buyer, seller, 1200 * 1e6, block.timestamp + 1000 days);
 
         // 6. Setup State
@@ -75,6 +75,7 @@ contract DeployDemoSuite is Script {
         vm.serializeAddress(json1, "Buyer", buyer);
         vm.serializeAddress(json1, "Seller", seller);
         vm.serializeAddress(json1, "ComplianceAgent", complianceAgent);
+        vm.serializeAddress(json1, "SimpleEscrow", address(escrow));
         string memory finalJson = vm.serializeUint(json1, "ChainId", block.chainid);
 
         vm.writeJson(finalJson, "./deployed_addresses.json");

@@ -2,6 +2,9 @@ import json
 from langchain_core.runnables import RunnableConfig
 from src.state import GraphState
 from src.agents.tools import get_llm_chain, llm
+from src.config import ADDRS
+from src.blockchain.client import is_connected, get_contract
+from src.blockchain.abis import REGISTRY_ABI
 
 def node_analyze_intent(state: GraphState, config: RunnableConfig):
     """Buyer Agent: Parses user input into structured intent."""
@@ -31,23 +34,33 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
         item = "Unknown"
         amount = 0.0
 
+    # Credentials from Graph State (Populated at init)
+    creds = state.get("buyer_credentials", {"has_sanctions": False, "has_sof": False})
+    has_sanctions = creds.get("has_sanctions", False)
+    has_sof = creds.get("has_sof", False)
+
     buyer_intent = {
         "item": item,
         "amount": amount,
-        "attached_vcs": {"sanctions": True, "sof": False}
+        "attached_vcs": {"sanctions": has_sanctions, "sof": has_sof}
     }
     
     # LLM Call for Thought
     thought_chain = get_llm_chain(
         "You are a Buyer Agent. You processed a request for '{item}' at ${amount}. "
-        "You have a Sanctions VC but NO Source of Funds VC. "
-        "Think aloud about your current status and what you are submitting."
+        "Your Wallet Status: Sanctions Verified={has_sanctions}, Source of Funds Verified={has_sof}. "
+        "Think aloud about your current status and what credentials you are submitting with your transaction."
     )
     
     # Merge config with tags
     run_config = config.copy() if config else {}
     run_config["tags"] = ["Buyer Agent"]
-    thought = thought_chain.invoke({"item": item, "amount": amount}, config=run_config)
+    thought = thought_chain.invoke({
+        "item": item, 
+        "amount": amount,
+        "has_sanctions": has_sanctions,
+        "has_sof": has_sof
+    }, config=run_config)
     
     return {
         "buyer_intent": buyer_intent,

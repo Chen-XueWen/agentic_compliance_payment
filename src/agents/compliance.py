@@ -15,20 +15,35 @@ def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
     amount = intent["amount"]
     vcs = intent["attached_vcs"]
     
+    # Pre-Check: Check On-Chain Status
+    is_sof_onchain = False
+    if is_connected() and ADDRS:
+        try:
+             registry = get_contract("IdentityRegistry", REGISTRY_ABI)
+             # Check if buyer has SoF
+             is_sof_onchain = registry.functions.hasSourceOfFunds(ADDRS["Buyer"]).call()
+        except Exception:
+             pass
+
     # LLM Evaluation
     chain = get_llm_chain(
         "You are a Compliance Agent. Rules: \n"
         "1. If amount > 1000 and Source of Funds (SoF) is missing, status is PENDING (require escrow).\n"
-        "2. If SoF is present, status is PASS.\n"
+        "2. If SoF is present (either uploaded OR already verified on-chain), status is PASS.\n"
         "3. If amount <= 1000, status is PASS.\n"
         "\n"
-        "Transaction: Amount=${amount}, SoF_VC={sof_vc}, Sanctions_VC={sanctions_vc}.\n"
+        "Transaction: Amount=${amount}, SoF_VC={sof_vc}, SoF_OnChain={sof_onchain}, Sanctions_VC={sanctions_vc}.\n"
         "Determine the status (PASS/PENDING) and explain your reasoning concisely."
     )
     
     run_config = config.copy() if config else {}
     run_config["tags"] = ["Compliance Agent"]
-    thought = chain.invoke({"amount": amount, "sof_vc": vcs["sof"], "sanctions_vc": vcs["sanctions"]}, config=run_config)
+    thought = chain.invoke({
+        "amount": amount, 
+        "sof_vc": vcs["sof"], 
+        "sof_onchain": is_sof_onchain,
+        "sanctions_vc": vcs["sanctions"]
+    }, config=run_config)
     
     # --- Web3 Integration ---
     status = "PENDING"
@@ -99,7 +114,7 @@ def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
                 status = status_map.get(status_int, "PENDING")
                 
                 # Update explanation based on real result
-                thought = f"On-chain Policy Result: {status}. TxHash: {tx_hash.hex()[:10]}..."
+                thought += f"\n\n[System]: On-chain Policy Result: {status}. TxHash: {tx_hash.hex()[:10]}..."
                 
                 # Extract Transaction ID
                 tx_id_hex = logs[0]["args"]["transactionId"].hex()
@@ -227,7 +242,7 @@ def node_execute_escrow(state: GraphState, config: RunnableConfig):
             })
             w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx_data_2, private_key=COMPLIANCE_PK).raw_transaction)
             
-            thought = f"On-chain: Tranche 1 (\${300}) settled via Wrapper. Tranche 2 (\${1200}) locked in Escrow ({escrow_addr})."
+            thought = f"On-chain: Tranche 1 (\\${upfront_uint/1e6}) settled via Wrapper. Tranche 2 (\\${escrow_amt_uint/1e6}) locked in Escrow ({escrow_addr})."
             
         except Exception as e:
             thought = f"Chain Execution Failed: {e}"
@@ -255,6 +270,9 @@ def node_finalize_settlement(state: GraphState, config: RunnableConfig):
             registry = get_contract("IdentityRegistry", REGISTRY_ABI)
             ca_account = Account.from_key(COMPLIANCE_PK)
             
+            # Fetch Nonce ONCE
+            current_nonce = w3.eth.get_transaction_count(ca_account.address)
+            
             # Fake hash for demo
             sof_hash = w3.keccak(text="MOCK_SOF_FILE")
             
@@ -262,24 +280,26 @@ def node_finalize_settlement(state: GraphState, config: RunnableConfig):
                 ADDRS["Buyer"], sof_hash
             ).build_transaction({
                 "from": ca_account.address,
-                "nonce": w3.eth.get_transaction_count(ca_account.address)
+                "nonce": current_nonce
             })
             w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx_data_1, private_key=COMPLIANCE_PK).raw_transaction)
             
             # 2. Release Escrow
             escrow_addr = ADDRS.get("SimpleEscrow") or ADDRS["ComplianceAgent"] 
             if escrow_addr:
-                if escrow_addr == ADDRS.get("SimpleEscrow"):
+                # Force strictly to the deployed address if available
+                target_escrow = ADDRS.get("SimpleEscrow")
+                if target_escrow:
                     escrow_contract = get_contract("SimpleEscrow", ESCROW_ABI)
-                else:
-                    escrow_contract = w3.eth.contract(address=escrow_addr, abi=ESCROW_ABI)
                     
-                tx_data_2 = escrow_contract.functions.release().build_transaction({
-                    "from": ca_account.address,
-                    "nonce": w3.eth.get_transaction_count(ca_account.address) + 1
-                })
-                w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx_data_2, private_key=COMPLIANCE_PK).raw_transaction)
-                thought = "On-chain: SoF Registered. Escrow Released to Seller."
+                    tx_data_2 = escrow_contract.functions.release().build_transaction({
+                        "from": ca_account.address,
+                        "nonce": current_nonce + 1 
+                    })
+                    w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx_data_2, private_key=COMPLIANCE_PK).raw_transaction)
+                    thought = "On-chain: SoF Registered. Escrow Released to Seller."
+                else:
+                    thought = "Escrow Contract Address Missing in Config."
                 
         except Exception as e:
             thought = f"Chain Finalization Failed: {e}"
@@ -288,8 +308,8 @@ def node_finalize_settlement(state: GraphState, config: RunnableConfig):
 
     # LLM Confirmation
     chain = get_llm_chain(
-        "You are a Compliance Agent. The Source of Funds document has been provided and verified. "
-        "Release the funds from escrow to the seller. State that the transaction is now fully compliant."
+        "You are a Compliance Agent. The system has just verified a Source of Funds document and automatically released the funds on the blockchain. "
+        "Inform the user that the compliance check is complete and the transaction has been finalized successfully."
     )
     
     run_config = config.copy() if config else {}

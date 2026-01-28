@@ -56,8 +56,8 @@ def sign_transfer_authorization(
     
     return {
         "v": signed.v,
-        "r": w3.to_bytes(signed.r),
-        "s": w3.to_bytes(signed.s),
+        "r": signed.r.to_bytes(32, 'big'),
+        "s": signed.s.to_bytes(32, 'big'),
         "from": owner,
         "to": to,
         "value": value,
