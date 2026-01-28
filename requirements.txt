@@ -1,0 +1,9 @@
+langchain
+langchain-community
+langchain-core
+langchain-ollama
+langgraph
+web3
+eth-account
+streamlit
+pydantic
