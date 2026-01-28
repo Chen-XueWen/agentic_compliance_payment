@@ -79,7 +79,20 @@ def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
             
             # 3. Check Status from Events
             # Event: TransactionAttested(bytes32 transactionId, uint8 status)
-            logs = wrapper.events.TransactionAttested().process_receipt(receipt)
+            # Use manual filtering to avoid MismatchedABI warnings from other events in receipt
+            tx_attested_event = wrapper.events.TransactionAttested()
+            event_topic = w3.keccak(text="TransactionAttested(bytes32,uint8)")
+            
+            logs = []
+            for log in receipt["logs"]:
+                # Check address and topic
+                if log["address"].lower() == wrapper.address.lower() and log["topics"][0] == event_topic:
+                    try:
+                        decoded = tx_attested_event.process_log(log)
+                        logs.append(decoded)
+                    except Exception:
+                        pass
+            
             if logs:
                 status_int = logs[0]["args"]["status"]
                 status_map = {0: "PASS", 1: "FAIL", 2: "PENDING"}
@@ -88,11 +101,8 @@ def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
                 # Update explanation based on real result
                 thought = f"On-chain Policy Result: {status}. TxHash: {tx_hash.hex()[:10]}..."
                 
-                # Extract Transaction ID from logs? 
-                # Event: TransactionAttested(bytes32 transactionId, uint8 status)
-                # We need the transactionId to resolve it later.
+                # Extract Transaction ID
                 tx_id_hex = logs[0]["args"]["transactionId"].hex()
-                # We can also pre-calculate it if we have the nonce.
                 
         except Exception as e:
             print(f"Web3 Error: {e}")
@@ -102,14 +112,7 @@ def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
             else:
                 status = "PENDING"
 
-    else:
-        # Fallback to logic if no web3
-        if vcs["sof"]: 
-            status = "PASS"
-        elif amount > 1000:
-            status = "PENDING"
-        else:
-            status = "PASS"
+
 
     return {
         "compliance_status": status,
@@ -228,11 +231,7 @@ def node_execute_escrow(state: GraphState, config: RunnableConfig):
             thought = f"Chain Execution Failed: {e}"
             print(thought)
 
-    else:
-        # Mock logic
-        upfront = amount * 0.2
-        escrow = amount * 0.8
-        thought = f"Smart Contract Executed. Seller received ${upfront}. Escrow holding ${escrow}."
+
 
     return {
         "ledger": get_onchain_ledger(),
@@ -283,8 +282,7 @@ def node_finalize_settlement(state: GraphState, config: RunnableConfig):
         except Exception as e:
             thought = f"Chain Finalization Failed: {e}"
             print(thought)
-    else:
-        thought = "Compliance Met. Funds Released."
+
 
     # LLM Confirmation
     chain = get_llm_chain(

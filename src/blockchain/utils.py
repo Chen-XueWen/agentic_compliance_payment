@@ -1,4 +1,5 @@
 import time
+import uuid
 from eth_account import Account
 from eth_account.messages import encode_typed_data
 from src.config import CHAIN_ID
@@ -20,7 +21,7 @@ def sign_transfer_authorization(
     owner = owner_account.address
     
     if nonce is None:
-        nonce = w3.keccak(text=str(time.time()))
+        nonce = w3.keccak(text=str(uuid.uuid4()))
 
     # EIP-712 Domain
     domain = {

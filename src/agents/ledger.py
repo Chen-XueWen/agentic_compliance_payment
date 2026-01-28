@@ -12,6 +12,7 @@ def get_onchain_ledger():
     
     buyer_bal = token.functions.balanceOf(ADDRS["Buyer"]).call()
     seller_bal = token.functions.balanceOf(ADDRS["Seller"]).call()
+    total_supply = token.functions.totalSupply().call()
     
     # We might have multiple escrows, but for demo we track total held by contracts?
     # Or just the main ones. SimpleEscrow is created dynamically.
@@ -20,5 +21,5 @@ def get_onchain_ledger():
     return {
         "buyer_balance": buyer_bal / 1e6,
         "seller_balance": seller_bal / 1e6,
-        "escrow_balance": (3000 * 1e6 - buyer_bal - seller_bal) / 1e6 # Simple diff
+        "escrow_balance": (total_supply - buyer_bal - seller_bal) / 1e6 # Dynamic diff
     }

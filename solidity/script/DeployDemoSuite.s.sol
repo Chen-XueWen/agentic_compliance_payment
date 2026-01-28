@@ -50,8 +50,8 @@ contract DeployDemoSuite is Script {
         X402PolicyWrapper wrapper = new X402PolicyWrapper(address(token), address(manager));
 
         // 6. Setup State
-        // Mint 3000 * 1e6 to Buyer
-        token.mint(buyer, 3000 * 1e6);
+        // Mint 10000 * 1e6 to Buyer (Matches Mock)
+        token.mint(buyer, 10000 * 1e6);
         
         // Set Buyer sanctions proof
         registry.setSanctionsCheck(buyer, keccak256("VALID_SANCTIONS_PROOF"));

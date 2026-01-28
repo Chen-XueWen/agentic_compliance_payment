@@ -11,6 +11,7 @@ from src.state import GraphState
 from src.config import ADDRS
 from src.blockchain.client import w3
 from src.blockchain import abis
+from src.agents.ledger import get_onchain_ledger
 
 # --- Config ---
 st.set_page_config(page_title="Agentic Compliance Payment", layout="wide")
@@ -96,7 +97,7 @@ if "graph_started" not in st.session_state:
 if "messages_log" not in st.session_state:
     st.session_state.messages_log = []
 if "current_ledger" not in st.session_state:
-    st.session_state.current_ledger = {"buyer_balance": 10000, "seller_balance": 0, "escrow_balance": 0}
+    st.session_state.current_ledger = get_onchain_ledger()
 if "compliance_status" not in st.session_state:
     st.session_state.compliance_status = "IDLE"
 
@@ -367,7 +368,7 @@ if st.session_state.compliance_status == "STARTING":
     
     initial_inputs = {
         "messages": [HumanMessage(content=buyer_request)],
-        "ledger": {"buyer_balance": 10000, "seller_balance": 0, "escrow_balance": 0},
+        "ledger": get_onchain_ledger(),
         # Reset other keys if needed
         "buyer_intent": {},
         "negotiation_log": []
@@ -383,6 +384,7 @@ if st.session_state.compliance_status == "PENDING":
     if st.button("Accept Escrow Alternative"):
         st.session_state.compliance_status = "ESCROW_INITIALIZING" # Temporary feedback
         run_interaction(resume=True)
+        st.rerun()
 
 # Refund & Admin
 with st.sidebar:

@@ -1,5 +1,7 @@
 # Agentic Compliance Payment System
 
+![Solution Architecture](./SolutionImage.png)
+
 An intelligent payment system that uses AI Agents (LangGraph) and On-Chain Contracts (Solidity) to enforce programmable compliance. This demo showcases a workflow where a Compliance Agent mediates a high-value transaction using a Smart Escrow when Source of Funds (SoF) is missing.
 
 ## Features

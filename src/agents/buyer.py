@@ -13,7 +13,7 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
     chain = get_llm_chain(
         "Extract the item and amount from this request: '{request}'. "
         "Return JSON with keys 'item' (string) and 'amount' (float). "
-        "If unsure, default to item='Luxury Watch' and amount=1500."
+        "If unsure, default to item='Unknown' and amount=0."
     )
     
     try:
@@ -28,8 +28,8 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
         amount = float(data.get("amount", 1500))
     except Exception as e:
         print(f"LLM Extraction Failed: {e}")
-        item = "Luxury Watch"
-        amount = 1500
+        item = "Unknown"
+        amount = 0.0
 
     buyer_intent = {
         "item": item,
