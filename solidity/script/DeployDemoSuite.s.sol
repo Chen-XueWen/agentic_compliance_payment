@@ -49,6 +49,12 @@ contract DeployDemoSuite is Script {
         // 5. Deploy Wrapper
         X402PolicyWrapper wrapper = new X402PolicyWrapper(address(token), address(manager));
 
+        // 5.5 Deploy SimpleEscrow (Standalone for Demo)
+        // In a real app, this is deployed per transaction. Here we deploy one shared instance.
+        // We use block.timestamp + 1000 days for expiry
+        import "../src/demo/SimpleEscrow.sol";
+        SimpleEscrow escrow = new SimpleEscrow(address(token), buyer, seller, 1200 * 1e6, block.timestamp + 1000 days);
+
         // 6. Setup State
         // Mint 10000 * 1e6 to Buyer (Matches Mock)
         token.mint(buyer, 10000 * 1e6);

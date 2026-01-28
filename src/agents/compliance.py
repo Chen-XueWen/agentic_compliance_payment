@@ -142,7 +142,7 @@ def node_propose_escrow(state: GraphState, config: RunnableConfig):
     run_config["tags"] = ["Compliance Agent"]
     thought = chain.invoke({"amount": amount, "upfront": upfront, "escrow": escrow}, config=run_config)
     
-    proposal = f"Escrow Proposal: Pay ${upfront:.2f} (20%) directly, lock ${escrow:.2f} (80%) in Escrow."
+    proposal = f"Escrow Proposal: Pay \${upfront:.2f} (20%) directly, lock \${escrow:.2f} (80%) in Escrow."
     
     return {
         "active_agent": "Compliance Agent",
@@ -187,13 +187,16 @@ def node_execute_escrow(state: GraphState, config: RunnableConfig):
             
             wrapper = get_contract("PolicyWrapper", WRAPPER_ABI)
             
+            # Fetch Nonce ONCE
+            current_nonce = w3.eth.get_transaction_count(ca_account.address)
+            
             tx_data_1 = wrapper.functions.payWithAuthorization(
                 auth_upfront["from"], ADDRS["Seller"], auth_upfront["value"],
                 auth_upfront["validAfter"], auth_upfront["validBefore"], auth_upfront["nonce"],
                 auth_upfront["v"], auth_upfront["r"], auth_upfront["s"]
             ).build_transaction({
                 "from": ca_account.address,
-                 "nonce": w3.eth.get_transaction_count(ca_account.address)
+                 "nonce": current_nonce
             })
             w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx_data_1, private_key=COMPLIANCE_PK).raw_transaction)
             
@@ -201,7 +204,9 @@ def node_execute_escrow(state: GraphState, config: RunnableConfig):
             escrow_amt_uint = int(escrow_amt * 1e6)
             
             # Fallback: Just transfer to the Address "SimpleEscrow" from deployed_addresses, pretend it's new.
-            escrow_addr = ADDRS.get("SimpleEscrow") or ADDRS["ComplianceAgent"] # Fallback
+            escrow_addr = ADDRS.get("SimpleEscrow")
+            if not escrow_addr:
+                 raise Exception("SimpleEscrow contract not found in ADDRS. Please redeploy.")
             
             # Fund Escrow
             # buyer signs auth for escrow
@@ -211,21 +216,18 @@ def node_execute_escrow(state: GraphState, config: RunnableConfig):
             
             # Call fundWithAuthorization on Escrow
             # Note: Using get_contract requires name in ADDRS, if using generic address instantiate manually
-            if escrow_addr == ADDRS.get("SimpleEscrow"):
-                escrow_contract = get_contract("SimpleEscrow", ESCROW_ABI)
-            else:
-                escrow_contract = w3.eth.contract(address=escrow_addr, abi=ESCROW_ABI)
+            escrow_contract = get_contract("SimpleEscrow", ESCROW_ABI)
 
             tx_data_2 = escrow_contract.functions.fundWithAuthorization(
                 auth_escrow["validAfter"], auth_escrow["validBefore"], auth_escrow["nonce"],
                 auth_escrow["v"], auth_escrow["r"], auth_escrow["s"]
             ).build_transaction({
                 "from": ca_account.address,
-                "nonce": w3.eth.get_transaction_count(ca_account.address) + 1 # +1 nonce
+                "nonce": current_nonce + 1 # +1 nonce
             })
             w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx_data_2, private_key=COMPLIANCE_PK).raw_transaction)
             
-            thought = f"On-chain: Tranche 1 ($300) settled via Wrapper. Tranche 2 ($1200) locked in Escrow ({escrow_addr})."
+            thought = f"On-chain: Tranche 1 (\${300}) settled via Wrapper. Tranche 2 (\${1200}) locked in Escrow ({escrow_addr})."
             
         except Exception as e:
             thought = f"Chain Execution Failed: {e}"
