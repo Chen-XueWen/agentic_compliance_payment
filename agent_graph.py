@@ -24,7 +24,7 @@ class GraphState(TypedDict):
     buyer_intent: dict      # {item, amount, attached_vcs: {sanctions: bool, sof: bool}}
     seller_offer: dict      # {sku, price, jurisdiction}
     compliance_status: str  # "PASS", "FAIL", "PENDING", "ESCROW_ACTIVE"
-    active_agent: str       # "BA", "SA", or "CA"
+    active_agent: str       # "Buyer Agent", "Seller Agent", or "Compliance Agent"
     negotiation_log: List[str]   # List of structured proposals/logs
     ledger: dict            # {buyer_balance, seller_balance, escrow_balance}
     current_thought: str    # The "internal monologue" of the active agent
@@ -101,9 +101,9 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
     
     return {
         "buyer_intent": buyer_intent,
-        "active_agent": "BA",
+        "active_agent": "Buyer Agent",
         "current_thought": thought,
-        "negotiation_log": [f"BA: Initiating purchase for {item} (${amount})."]
+        "negotiation_log": [f"Buyer Agent: Initiating purchase for {item} (${amount})."]
     }
 
 def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
@@ -139,7 +139,7 @@ def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
 
     return {
         "compliance_status": status,
-        "active_agent": "CA",
+        "active_agent": "Compliance Agent",
         "current_thought": thought
     }
 
@@ -167,9 +167,9 @@ def node_propose_escrow(state: GraphState, config: RunnableConfig):
     proposal = f"Escrow Proposal: Pay ${upfront:.2f} (20%) directly, lock ${escrow:.2f} (80%) in Escrow."
     
     return {
-        "active_agent": "CA",
+        "active_agent": "Compliance Agent",
         "current_thought": thought,
-        "negotiation_log": [f"CA: {proposal}"]
+        "negotiation_log": [f"Compliance Agent: {proposal}"]
     }
 
 def node_negotiate_acceptance(state: GraphState, config: RunnableConfig):
@@ -189,9 +189,9 @@ def node_negotiate_acceptance(state: GraphState, config: RunnableConfig):
     thought = chain.invoke({}, config=run_config)
     
     return {
-        "active_agent": "BA",
+        "active_agent": "Buyer Agent",
         "current_thought": thought,
-        "negotiation_log": ["BA: Proposal Accepted. Proceeding to smart contract."]
+        "negotiation_log": ["Buyer Agent: Proposal Accepted. Proceeding to smart contract."]
     }
 
 def node_execute_escrow(state: GraphState, config: RunnableConfig):
@@ -242,9 +242,9 @@ def node_finalize_settlement(state: GraphState, config: RunnableConfig):
     return {
         "ledger": ledger,
         "compliance_status": "PASS",
-        "active_agent": "CA",
+        "active_agent": "Compliance Agent",
         "current_thought": thought,
-        "negotiation_log": ["CA: Compliance Met. Funds Released."]
+        "negotiation_log": ["Compliance Agent: Compliance Met. Funds Released."]
     }
 
 # --- routing logic ---
