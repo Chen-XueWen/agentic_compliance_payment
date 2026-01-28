@@ -6,10 +6,10 @@ An intelligent payment system that uses AI Agents (LangGraph) and On-Chain Contr
 
 ## Features
 
--   **Multi-Agent Workflow**: Buyer, Seller, and Compliance Agents interact to negotiate and settle transactions.
--   **On-Chain Enforcement**: Solidity contracts (`X402PolicyWrapper`, `SimpleEscrow`) enforce business rules on a local Ethereum blockchain.
--   **Programmable Mediation**: Automatically proposes and executes split payments (Escrow) for partial compliance.
--   **Modular Architecture**: Clean separation between Agent Logic (`src/agents`) and Blockchain Services (`src/blockchain`).
+- **Multi-Agent Workflow**: Buyer, Seller, and Compliance Agents interact to negotiate and settle transactions.
+- **On-Chain Programmable Compliance**: Solidity contracts implement the [Global Layer One Programmable Compliance framework](https://doc.global-layer-one.org/docs/programmable-compliance/reference-model/overview), with `X402PolicyWrapper` serving as the x402-compatible entry point for policy evaluation, attestation, and conditional settlement on a local Ethereum blockchain.
+- **Programmable Mediation**: The Compliance Agent can propose and execute split payments using an escrow contract to resolve pending compliance requirements.
+- **Modular Architecture**: Clean separation between agent logic (`src/agents`) and blockchain services (`src/blockchain`).
 
 ## Prerequisites
 
