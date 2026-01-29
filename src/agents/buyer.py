@@ -65,7 +65,7 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
     return {
         "buyer_intent": buyer_intent,
         "active_agent": "Buyer Agent",
-        "current_thought": thought,
+        "current_thought": f"Buyer Agent: {thought}",
         "negotiation_log": [f"Buyer Agent: Initiating purchase for {item} (${amount})."]
     }
 
@@ -85,6 +85,6 @@ def node_negotiate_acceptance(state: GraphState, config: RunnableConfig):
     
     return {
         "active_agent": "Buyer Agent",
-        "current_thought": thought,
+        "current_thought": f"Buyer Agent: {thought}",
         "negotiation_log": ["Buyer Agent: Proposal Accepted. Proceeding to smart contract."]
     }

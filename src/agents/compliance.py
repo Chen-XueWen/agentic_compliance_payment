@@ -132,7 +132,7 @@ def node_evaluate_compliance(state: GraphState, config: RunnableConfig):
     return {
         "compliance_status": status,
         "active_agent": "Compliance Agent",
-        "current_thought": thought,
+        "current_thought": f"Compliance Agent: {thought}",
         "ledger": get_onchain_ledger(), # Sync ledger
         "transaction_id": locals().get("tx_id_hex", "")
     }
@@ -161,7 +161,7 @@ def node_propose_escrow(state: GraphState, config: RunnableConfig):
     
     return {
         "active_agent": "Compliance Agent",
-        "current_thought": thought,
+        "current_thought": f"Compliance Agent: {thought}",
         "negotiation_log": [f"Compliance Agent: {proposal}"]
     }
 
@@ -254,7 +254,7 @@ def node_execute_escrow(state: GraphState, config: RunnableConfig):
         "ledger": get_onchain_ledger(),
         "compliance_status": "ESCROW_ACTIVE",
         "active_agent": "LEDGER",
-        "current_thought": thought,
+        "current_thought": f"Compliance Agent: {thought}",
         "negotiation_log": ["Chain: Tx confirmed. Funds Locked."]
     }
 
@@ -320,6 +320,6 @@ def node_finalize_settlement(state: GraphState, config: RunnableConfig):
         "ledger": get_onchain_ledger(),
         "compliance_status": "PASS",
         "active_agent": "Compliance Agent",
-        "current_thought": llm_thought,
+        "current_thought": f"Compliance Agent: {llm_thought}",
         "negotiation_log": ["Compliance Agent: Compliance Met. Funds Released."]
     }

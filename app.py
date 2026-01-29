@@ -158,25 +158,28 @@ class StreamlitTokenStreamer(BaseCallbackHandler):
         self.placeholder = None
         self.text = ""
         self.stream_box = None
+        self.agent_name = "Agent"  # Store agent name for prefix
         
     def on_llm_start(self, serialized, prompts, **kwargs):
         self.text = ""
-        # Determine agent from tags if available
+        # Determine agent from tags - find the one containing "Agent"
         tags = kwargs.get("tags", [])
-        agent_name = tags[0] if tags else "Agent"
+        # LangChain adds internal tags like 'seq:step:X', so find ours specifically
+        agent_tag = next((t for t in tags if "Agent" in t), None)
+        self.agent_name = agent_tag if agent_tag else "Agent"
         
         # Create a chat message placeholder for streaming
-        self.stream_box = self.container.chat_message(name=agent_name, avatar="🤖")
+        self.stream_box = self.container.chat_message(name=self.agent_name, avatar="🤖")
         self.placeholder = self.stream_box.empty()
-        self.placeholder.markdown("...")
+        self.placeholder.markdown(f"**{self.agent_name}:** ...")
         
     def on_llm_new_token(self, token, **kwargs):
         self.text += token
-        self.placeholder.markdown(self.text + "▌")
+        self.placeholder.markdown(f"**{self.agent_name}:** {self.text}▌")
         
     def on_llm_end(self, response, **kwargs):
         # Finalize the message without the cursor
-        self.placeholder.markdown(self.text)
+        self.placeholder.markdown(f"**{self.agent_name}:** {self.text}")
 
 # --- Main Panel ---
 st.title("🤖 Agentic Compliance Payment System")
@@ -260,7 +263,7 @@ def render_history_to_container(container):
     with container:
         for msg in st.session_state.messages_log:
             with st.chat_message(name=msg["agent"], avatar="🤖"):
-                st.markdown(f"**{msg['agent']}**: {msg['thought']}")
+                st.markdown(msg['thought'])
                 if msg.get("log"):
                     st.code(msg["log"])
 
@@ -417,30 +420,31 @@ if st.session_state.compliance_status == "ESCROW_INITIALIZING":
     
     run_interaction(resume=True)
 
-# Refund & Admin
+# Refund & Admin (only show when escrow is active)
 with st.sidebar:
-    st.markdown("---")
-    st.subheader("Admin Controls")
-    if st.button("Refund Escrow"):
-         # Refund Logic directly via Web3 for demo
-         if w3 and ADDRS:
-             try:
-                 escrow_addr = ADDRS.get("SimpleEscrow") or ADDRS["ComplianceAgent"] 
-                 # We fallback because we don't know exact escrow address in this simple setup
-                 # In reality we would read it from logs/events
-                 if escrow_addr:
-                     # Using CA key to call refund
-                     from eth_account import Account
-                     escrow = w3.eth.contract(address=escrow_addr, abi=abis.ESCROW_ABI)
-                     ca = Account.from_key("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-                     tx = escrow.functions.refund().build_transaction({
-                         "from": ca.address,
-                         "nonce": w3.eth.get_transaction_count(ca.address)
-                     })
-                     w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx, private_key=ca.key).raw_transaction)
-                     st.success("Refund Triggered on Chain.")
-             except Exception as e:
-                 st.error(f"Refund Failed: {e}")
+    if st.session_state.compliance_status == "ESCROW_ACTIVE":
+        st.markdown("---")
+        st.subheader("Admin Controls")
+        if st.button("Refund Escrow"):
+            # Refund Logic directly via Web3 for demo
+            if w3 and ADDRS:
+                try:
+                    escrow_addr = ADDRS.get("SimpleEscrow") or ADDRS["ComplianceAgent"] 
+                    # We fallback because we don't know exact escrow address in this simple setup
+                    # In reality we would read it from logs/events
+                    if escrow_addr:
+                        # Using CA key to call refund
+                        from eth_account import Account
+                        escrow = w3.eth.contract(address=escrow_addr, abi=abis.ESCROW_ABI)
+                        ca = Account.from_key("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+                        tx = escrow.functions.refund().build_transaction({
+                            "from": ca.address,
+                            "nonce": w3.eth.get_transaction_count(ca.address)
+                        })
+                        w3.eth.send_raw_transaction(w3.eth.account.sign_transaction(tx, private_key=ca.key).raw_transaction)
+                        st.success("Refund Triggered on Chain.")
+                except Exception as e:
+                    st.error(f"Refund Failed: {e}")
 
 # Source of Funds Upload
 if st.session_state.compliance_status == "ESCROW_ACTIVE":
