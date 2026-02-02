@@ -12,7 +12,7 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
     messages = state["messages"]
     last_message = messages[-1].content
     
-    # LLM Call for Extraction
+    # LLM Call for Extraction (No streaming callback to avoid ghost log)
     chain = get_llm_chain(
         "Extract the item and amount from this request: '{request}'. "
         "Return JSON with keys 'item' (string) and 'amount' (float). "
@@ -20,9 +20,9 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
     )
     
     try:
-        run_config = config.copy() if config else {}
-        run_config["tags"] = ["Buyer Agent"]
-        response = chain.invoke({"request": last_message}, config=run_config)
+        # Run without config callbacks to keep this internal
+        # Explicitly disable callbacks to prevent the main graph streamer from attaching
+        response = chain.invoke({"request": last_message}, config={"callbacks": []})
         
         # Basic cleanup to find JSON
         json_str = response[response.find("{"):response.rfind("}")+1]
@@ -62,11 +62,15 @@ def node_analyze_intent(state: GraphState, config: RunnableConfig):
         "has_sof": has_sof
     }, config=run_config)
     
+    # Format the intent as a markdown code block for the log
+    intent_log = f"```json\n{json.dumps(buyer_intent, indent=2)}\n```"
+    
     return {
         "buyer_intent": buyer_intent,
         "active_agent": "Buyer Agent",
         "current_thought": f"Buyer Agent: {thought}",
-        "negotiation_log": [f"Buyer Agent: Initiating purchase for {item} (${amount})."]
+        # Add the structured intent to the log so it persists
+        "negotiation_log": [f"Buyer Agent: Initiating purchase for {item} (${amount}).", intent_log]
     }
 
 def node_negotiate_acceptance(state: GraphState, config: RunnableConfig):

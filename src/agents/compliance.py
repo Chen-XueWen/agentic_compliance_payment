@@ -157,7 +157,7 @@ def node_propose_escrow(state: GraphState, config: RunnableConfig):
     run_config["tags"] = ["Compliance Agent"]
     thought = chain.invoke({"amount": amount, "upfront": upfront, "escrow": escrow}, config=run_config)
     
-    proposal = f"Escrow Proposal: Pay \${upfront:.2f} (20%) directly, lock \${escrow:.2f} (80%) in Escrow."
+    proposal = f"Escrow Proposal: Pay ${upfront:.2f} (20%) directly, lock ${escrow:.2f} (80%) in Escrow."
     
     return {
         "active_agent": "Compliance Agent",

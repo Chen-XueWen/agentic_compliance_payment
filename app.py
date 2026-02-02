@@ -171,15 +171,15 @@ class StreamlitTokenStreamer(BaseCallbackHandler):
         # Create a chat message placeholder for streaming
         self.stream_box = self.container.chat_message(name=self.agent_name, avatar="🤖")
         self.placeholder = self.stream_box.empty()
-        self.placeholder.markdown(f"**{self.agent_name}:** ...")
+        self.placeholder.markdown(f"**{self.agent_name}:**\n\n ...")
         
     def on_llm_new_token(self, token, **kwargs):
         self.text += token
-        self.placeholder.markdown(f"**{self.agent_name}:** {self.text}▌")
+        self.placeholder.markdown(f"**{self.agent_name}:**\n\n {self.text}▌")
         
     def on_llm_end(self, response, **kwargs):
         # Finalize the message without the cursor
-        self.placeholder.markdown(f"**{self.agent_name}:** {self.text}")
+        self.placeholder.markdown(f"**{self.agent_name}:**\n\n {self.text}")
 
 # --- Main Panel ---
 st.title("🤖 Agentic Compliance Payment System")
