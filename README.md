@@ -6,7 +6,7 @@ An intelligent payment system that uses AI Agents (LangGraph) and On-Chain Contr
 
 <p align="center">
   <a href="https://youtu.be/BoJ4ECh-WPc">
-    <img src="https://img.youtube.com/vi/BoJ4ECh-WPc/maxresdefault.jpg" width="800">
+    <img src="https://img.youtube.com/vi/BoJ4ECh-WPc/maxresdefault.jpg" width="500">
   </a><br>
     <sup><i>Click here to watch the full demo on YouTube.</i></sup>
 </p>
