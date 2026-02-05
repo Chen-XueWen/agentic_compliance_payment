@@ -4,6 +4,13 @@
 
 An intelligent payment system that uses AI Agents (LangGraph) and On-Chain Contracts (Solidity) to enforce programmable compliance. This demo showcases a workflow where a Compliance Agent mediates a high-value transaction using a Smart Escrow when Source of Funds (SoF) is missing.
 
+<p align="center">
+  <a href="https://youtu.be/BoJ4ECh-WPc">
+    <img src="https://img.youtube.com/vi/BoJ4ECh-WPc/maxresdefault.jpg" width="800">
+  </a><br>
+    <sup><i>Click here to watch the full demo on YouTube.</i></sup>
+</p>
+
 ## Features
 
 - **Multi-Agent Workflow**: Buyer, Seller, and Compliance Agents interact to negotiate and settle transactions.
